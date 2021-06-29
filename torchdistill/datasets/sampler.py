@@ -1,13 +1,16 @@
 import bisect
 import copy
 from collections import defaultdict
+from typing import Iterator, Optional
 
 import numpy as np
 import torch
 import torch.utils.data
 import torchvision
 from PIL import Image
-from torch.utils.data.sampler import BatchSampler, Sampler
+from torch.utils.data import Dataset
+from torch.utils.data.distributed import DistributedSampler
+from torch.utils.data.sampler import WeightedRandomSampler, BatchSampler, Sampler
 from torch.utils.model_zoo import tqdm
 
 from torchdistill.common.constant import def_logger
@@ -37,6 +40,7 @@ class GroupedBatchSampler(BatchSampler):
             0, i.e. they must be in the range [0, num_groups).
         batch_size (int): Size of mini-batch.
     """
+
     def __init__(self, sampler, group_ids, batch_size):
         if not isinstance(sampler, Sampler):
             raise ValueError(
@@ -85,6 +89,82 @@ class GroupedBatchSampler(BatchSampler):
 
     def __len__(self):
         return len(self.sampler) // self.batch_size
+        
+class DistributedProxySampler(DistributedSampler):
+    """Distributed sampler proxy to adapt user's sampler for distributed data parallelism configuration.
+
+    Code is based on https://github.com/pytorch/pytorch/issues/23430#issuecomment-562350407
+
+
+    .. note::
+        Input sampler is assumed to have a constant size.
+
+    Args:
+        sampler: Input torch data sampler.
+        num_replicas: Number of processes participating in distributed training.
+        rank: Rank of the current process within ``num_replicas``.
+
+    """
+
+    def __init__(self, sampler: Sampler, num_replicas: Optional[int] = None, rank: Optional[int] = None) -> None:
+
+        if not isinstance(sampler, Sampler):
+            raise TypeError(f"Argument sampler should be instance of torch Sampler, but given: {type(sampler)}")
+
+        if not hasattr(sampler, "__len__"):
+            raise TypeError("Argument sampler should have length")
+
+        super(DistributedProxySampler, self).__init__(
+            sampler, num_replicas=num_replicas, rank=rank, shuffle=False  # type: ignore[arg-type]
+        )
+        self.sampler = sampler
+
+    def __iter__(self) -> Iterator:
+        # deterministically shuffle based on epoch
+        torch.manual_seed(self.epoch)
+
+        indices = []  # type: List
+        while len(indices) < self.total_size:
+            indices += list(self.sampler)
+
+        if len(indices) > self.total_size:
+            indices = indices[: self.total_size]
+
+        # subsample
+        indices = indices[self.rank : self.total_size : self.num_replicas]
+        if len(indices) != self.num_samples:
+            raise RuntimeError(f"{len(indices)} vs {self.num_samples}")
+
+        return iter(indices)
+
+
+class TargetClassSampler(WeightedRandomSampler):
+    """
+    It outputs dataset that have 1 - dustbin_rate proportion of target classes.
+
+    Arguments:
+        dataset (Dataset): Input dataset.
+        target_class_ids (list[int]): List of target class ids.
+        dustbin_rate (int): Proportion of dustbin classes (classes in dataset 
+            that are not in target class).
+    """
+
+    def __init__(self, dataset, target_class_ids, dustbin_rate=0.5):
+        target_class_ids = set(target_class_ids)
+        idx2class = {v: k for k, v in dataset.class_to_idx.items()}
+        target_classes = [idx2class[v] for v in target_class_ids]
+
+        logger.info("Target classes : {}".format(target_classes))
+
+        weights = [0] * len(dataset.classes)
+
+        for class_name in dataset.classes:
+            if class_name in target_classes:
+                weights[dataset.class_to_idx[class_name]] = (1 - dustbin_rate) / len(target_classes)
+            else:
+                weights[dataset.class_to_idx[class_name]] = dustbin_rate / (len(dataset.classes) - len(target_classes))
+
+        super().__init__(weights, len(weights))
 
 
 class _SubsetSampler(Sampler):
@@ -211,3 +291,15 @@ def get_batch_sampler(dataset, class_name, *args, **kwargs):
         group_ids = create_aspect_ratio_groups(dataset, k=kwargs.pop('aspect_ratio_group_factor'))
         return batch_sampler_cls(*args, group_ids, **kwargs)
     return batch_sampler_cls(*args, **kwargs)
+
+def get_target_class_sampler(dataset, class_name, *args, **kwargs):
+    if class_name != 'TargetClassSampler':
+        logger.info('No batch sampler called `{}` is registered.'.format(class_name))
+        return None
+
+    sampler_cls = TargetClassSampler
+    if sampler_cls == TargetClassSampler:
+        target_classes = kwargs['target_class_ids']
+        print(target_classes)
+        return sampler_cls(dataset, target_classes, **kwargs)
+    return sampler_cls(*args, **kwargs)

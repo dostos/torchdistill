@@ -12,7 +12,7 @@ from torchdistill.datasets.coco import ImageToTensor, Compose, CocoRandomHorizon
 from torchdistill.datasets.collator import get_collate_func
 from torchdistill.datasets.registry import DATASET_DICT
 from torchdistill.datasets.sample_loader import get_sample_loader
-from torchdistill.datasets.sampler import get_batch_sampler
+from torchdistill.datasets.sampler import get_batch_sampler, TargetClassSampler, DistributedProxySampler
 from torchdistill.datasets.transform import TRANSFORM_CLASS_DICT, CustomCompose
 from torchdistill.datasets.wrapper import default_idx2subpath, BaseDatasetWrapper, CacheableDataset, get_dataset_wrapper
 
@@ -162,6 +162,17 @@ def get_all_datasets(datasets_config):
         dataset_dict.update(sub_dataset_dict)
     return dataset_dict
 
+def get_sampler(dataset, sampler_config, random_sample, distributed, accelerator=None):
+    if sampler_config is None:
+        sampler = RandomSampler(dataset) if random_sample else SequentialSampler(dataset)
+    else:
+        sampler = get_target_class_sampler(dataset, sampler_config['type'], sampler, **sampler_config['params'])
+        
+    if distributed and accelerator is None:
+        sampler =  DistributedProxySampler(sampler)
+    
+    return sampler
+
 
 def build_data_loader(dataset, data_loader_config, distributed, accelerator=None):
     num_workers = data_loader_config['num_workers']
@@ -173,10 +184,9 @@ def build_data_loader(dataset, data_loader_config, distributed, accelerator=None
         dataset = CacheableDataset(dataset, cache_dir_path, idx2subpath_func=default_idx2subpath)
     elif data_loader_config.get('requires_supp', False):
         dataset = BaseDatasetWrapper(dataset)
-
-    sampler = DistributedSampler(dataset) if distributed and accelerator is None \
-        else RandomSampler(dataset) if data_loader_config.get('random_sample', False) else SequentialSampler(dataset)
-    batch_sampler_config = data_loader_config.get('batch_sampler', None)
+    random_sample = data_loader_config.get('random_sample', False)
+    sampler = get_sampler(dataset, data_loader_config.get('sampler', None), random_sample, distributed, accelerator)
+    batch_sampler_config = data_loader_config.get('batch_sampler', None)    
     batch_sampler = None if batch_sampler_config is None \
         else get_batch_sampler(dataset, batch_sampler_config['type'], sampler, **batch_sampler_config['params'])
     collate_fn = get_collate_func(data_loader_config.get('collate_fn', None))
