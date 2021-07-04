@@ -21,6 +21,9 @@ def load_yaml_file(yaml_file_path, custom_mode=True):
         return yaml.load(fp, Loader=yaml.FullLoader)
 
 def load_yaml_files(yaml_file_paths, custom_mode=True):
+    if custom_mode:
+        yaml.add_constructor('!join', yaml_join, Loader=yaml.FullLoader)
+        yaml.add_constructor('!pathjoin', yaml_pathjoin, Loader=yaml.FullLoader)
     lines = str()
     with fileinput.input(files=yaml_file_paths) as f:
         for line in f:
