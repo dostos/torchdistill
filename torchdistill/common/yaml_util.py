@@ -1,5 +1,5 @@
 import os
-
+import fileinput
 import yaml
 
 
@@ -19,3 +19,12 @@ def load_yaml_file(yaml_file_path, custom_mode=True):
         yaml.add_constructor('!pathjoin', yaml_pathjoin, Loader=yaml.FullLoader)
     with open(yaml_file_path, 'r') as fp:
         return yaml.load(fp, Loader=yaml.FullLoader)
+
+def load_yaml_files(yaml_file_paths, custom_mode=True):
+    lines = str()
+    with fileinput.input(files=yaml_file_paths) as f:
+        for line in f:
+            lines = lines + line
+        print(lines)
+        return yaml.load(lines, Loader=yaml.FullLoader)
+    
