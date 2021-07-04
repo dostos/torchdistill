@@ -114,6 +114,7 @@ def train(teacher_model, student_model, dataset_dict, ckpt_file_path, device, de
         best_val_top1_accuracy, _, _ = load_ckpt(ckpt_file_path, optimizer=optimizer, lr_scheduler=lr_scheduler)
 
     log_freq = train_config['log_freq']
+    ckpt = train_config.get('ckpt', False)
     student_model_without_ddp = student_model.module if module_util.check_if_wrapped(student_model) else student_model
     start_time = time.time()
     for epoch in range(args.start_epoch, training_box.num_epochs):
@@ -121,7 +122,7 @@ def train(teacher_model, student_model, dataset_dict, ckpt_file_path, device, de
         train_one_epoch(training_box, device, epoch, log_freq)
         val_top1_accuracy = evaluate(student_model, training_box.val_data_loader, device, device_ids, distributed,
                                      log_freq=log_freq, header='Validation:')
-        if val_top1_accuracy > best_val_top1_accuracy and is_main_process():
+        if ckpt and val_top1_accuracy > best_val_top1_accuracy and is_main_process():
             logger.info('Best top-1 accuracy: {:.4f} -> {:.4f}'.format(best_val_top1_accuracy, val_top1_accuracy))
             logger.info('Updating ckpt at {}'.format(ckpt_file_path))
             best_val_top1_accuracy = val_top1_accuracy
@@ -131,6 +132,13 @@ def train(teacher_model, student_model, dataset_dict, ckpt_file_path, device, de
 
     if distributed:
         dist.barrier()
+        
+    if val_top1_accuracy > best_val_top1_accuracy and is_main_process():
+        logger.info('Best top-1 accuracy: {:.4f} -> {:.4f}'.format(best_val_top1_accuracy, val_top1_accuracy))
+        logger.info('Updating ckpt at {}'.format(ckpt_file_path))
+        best_val_top1_accuracy = val_top1_accuracy
+        save_ckpt(student_model_without_ddp, optimizer, lr_scheduler,
+                    best_val_top1_accuracy, config, args, ckpt_file_path)
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
