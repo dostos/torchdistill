@@ -7,7 +7,7 @@ import torch
 import torch.utils.data
 import torchvision
 from PIL import Image
-from torch.utils.data.sampler import BatchSampler, Sampler
+from torch.utils.data.sampler import WeightedRandomSampler, BatchSampler, Sampler
 from torch.utils.model_zoo import tqdm
 
 from torchdistill.common.constant import def_logger
@@ -211,3 +211,23 @@ def get_batch_sampler(dataset, class_name, *args, **kwargs):
         group_ids = create_aspect_ratio_groups(dataset, k=kwargs.pop('aspect_ratio_group_factor'))
         return batch_sampler_cls(*args, group_ids, **kwargs)
     return batch_sampler_cls(*args, **kwargs)
+
+
+class TargetClassSampler(WeightedRandomSampler):
+    def __init__(self, dataset, target_classes, target_weight = 0.5):
+        target_classes = set(target_classes)
+        num_target_classes = len(target_classes)
+        num_classes = len(dataset.classes)
+        idx2class = {v: k for k, v in dataset.class_to_idx.items()}
+
+        logger.info('Target classes {}'.format([idx2class[c] for c in target_classes]))
+
+        sample_weights = [0] * len(dataset)
+
+        for index, (input, label) in enumerate(dataset):
+            if label in target_classes:
+                sample_weights[index] = target_weight / num_target_classes
+            else:
+                sample_weights[index] = (1.0 - target_weight) / (num_classes - num_target_classes)
+
+        super().__init__(weights=sample_weights, num_samples=len(sample_weights))
