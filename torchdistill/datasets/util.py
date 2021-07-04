@@ -7,12 +7,14 @@ from torch.utils.data.distributed import DistributedSampler
 from torchvision.datasets import PhotoTour, Kinetics400, HMDB51, UCF101, Cityscapes, CocoCaptions, CocoDetection, \
     SBDataset, VOCSegmentation, VOCDetection
 
+from ignite.distributed import DistributedProxySampler
+
 from torchdistill.common.constant import def_logger
 from torchdistill.datasets.coco import ImageToTensor, Compose, CocoRandomHorizontalFlip, get_coco
 from torchdistill.datasets.collator import get_collate_func
 from torchdistill.datasets.registry import DATASET_DICT
 from torchdistill.datasets.sample_loader import get_sample_loader
-from torchdistill.datasets.sampler import get_batch_sampler
+from torchdistill.datasets.sampler import get_batch_sampler, get_sampler
 from torchdistill.datasets.transform import TRANSFORM_CLASS_DICT, CustomCompose
 from torchdistill.datasets.wrapper import default_idx2subpath, BaseDatasetWrapper, CacheableDataset, get_dataset_wrapper
 
@@ -162,10 +164,21 @@ def get_all_datasets(datasets_config):
         dataset_dict.update(sub_dataset_dict)
     return dataset_dict
 
+def build_sampler(dataset, sampler_config, random_sample, distributed, accelerator):
+    if sampler_config is not None:
+        sampler = get_sampler(dataset, sampler_config['type'], **sampler_config['params'])
+    elif random_sample:
+        sampler = RandomSampler(dataset)
+    else:
+        sampler = SequentialSampler(dataset)
+
+    return DistributedProxySampler(sampler) if distributed and accelerator is None else sampler
+
 
 def build_data_loader(dataset, data_loader_config, distributed, accelerator=None):
     num_workers = data_loader_config['num_workers']
     cache_dir_path = data_loader_config.get('cache_output', None)
+    sampler = build_sampler(dataset, data_loader_config.get('sampler', None), data_loader_config.get('random_sample', False), distributed, accelerator)
     dataset_wrapper_config = data_loader_config.get('dataset_wrapper', None)
     if isinstance(dataset_wrapper_config, dict) and len(dataset_wrapper_config) > 0:
         dataset = get_dataset_wrapper(dataset_wrapper_config['name'], dataset, **dataset_wrapper_config['params'])
@@ -173,9 +186,6 @@ def build_data_loader(dataset, data_loader_config, distributed, accelerator=None
         dataset = CacheableDataset(dataset, cache_dir_path, idx2subpath_func=default_idx2subpath)
     elif data_loader_config.get('requires_supp', False):
         dataset = BaseDatasetWrapper(dataset)
-
-    sampler = DistributedSampler(dataset) if distributed and accelerator is None \
-        else RandomSampler(dataset) if data_loader_config.get('random_sample', False) else SequentialSampler(dataset)
     batch_sampler_config = data_loader_config.get('batch_sampler', None)
     batch_sampler = None if batch_sampler_config is None \
         else get_batch_sampler(dataset, batch_sampler_config['type'], sampler, **batch_sampler_config['params'])

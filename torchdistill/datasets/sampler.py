@@ -215,12 +215,20 @@ def get_batch_sampler(dataset, class_name, *args, **kwargs):
 
 class TargetClassSampler(WeightedRandomSampler):
     def __init__(self, dataset, target_classes, target_weight = 0.5):
-        target_classes = set(target_classes)
-        num_target_classes = len(target_classes)
-        num_classes = len(dataset.classes)
+        target_classes_set = set()
         idx2class = {v: k for k, v in dataset.class_to_idx.items()}
 
-        logger.info('Target classes {}'.format([idx2class[c] for c in target_classes]))
+        for target_class in target_classes:
+            if isinstance(target_class, int) and target_class in idx2class:
+                target_classes_set.add(target_class)
+            elif isinstance(target_class, str) and target_class in dataset.class_to_idx:
+                target_classes_set.add(dataset.class_to_idx[target_class])
+
+        target_classes = target_classes_set
+        num_target_classes = len(target_classes)
+        num_classes = len(dataset.classes)
+
+        logger.info('Target classes {} weight {}'.format([idx2class[c] for c in target_classes], target_weight))
 
         sample_weights = [0] * len(dataset)
 
@@ -231,3 +239,10 @@ class TargetClassSampler(WeightedRandomSampler):
                 sample_weights[index] = (1.0 - target_weight) / (num_classes - num_target_classes)
 
         super().__init__(weights=sample_weights, num_samples=len(sample_weights))
+
+def get_sampler(dataset, class_name, *args, **kwargs):
+    if class_name != 'TargetClassSampler':
+        logger.info('No sampler called `{}` is registered.'.format(class_name))
+        return None
+    
+    return TargetClassSampler(dataset, **kwargs)
