@@ -3,6 +3,8 @@ import datetime
 import os
 import time
 
+from thop import profile
+
 import torch
 from torch import distributed as dist
 from torch.backends import cudnn
@@ -22,6 +24,10 @@ from torchdistill.models.registry import get_model
 
 logger = def_logger.getChild(__name__)
 
+def model_summary(model):
+    input = torch.randn(1, 3, 32, 32).cuda()
+    macs, params = profile(model, inputs=(input,))
+    logger.info('Model macs {} params {}'.format(macs, params))
 
 def get_argparser():
     parser = argparse.ArgumentParser(description='Knowledge distillation for image classification models')
@@ -109,11 +115,13 @@ def train(teacher_model, student_model, dataset_dict, ckpt_file_path, device, de
         else get_distillation_box(teacher_model, student_model, dataset_dict, train_config,
                                   device, device_ids, distributed, lr_factor)
     best_val_top1_accuracy = 0.0
+    best_epoch = 0
     optimizer, lr_scheduler = training_box.optimizer, training_box.lr_scheduler
     if file_util.check_if_exists(ckpt_file_path):
         best_val_top1_accuracy, _, _ = load_ckpt(ckpt_file_path, optimizer=optimizer, lr_scheduler=lr_scheduler)
 
     log_freq = train_config['log_freq']
+    early_stop = train_config.get('early_stop', 10)
     student_model_without_ddp = student_model.module if module_util.check_if_wrapped(student_model) else student_model
     start_time = time.time()
     for epoch in range(args.start_epoch, training_box.num_epochs):
@@ -159,6 +167,10 @@ def main(args):
         models_config['student_model'] if 'student_model' in models_config else models_config['model']
     ckpt_file_path = student_model_config['ckpt']
     student_model = load_model(student_model_config, device, distributed, args.sync_bn)
+
+    model_summary(teacher_model)
+    model_summary(student_model)
+
     if not args.test_only:
         train(teacher_model, student_model, dataset_dict, ckpt_file_path, device, device_ids, distributed, config, args)
         student_model_without_ddp =\
