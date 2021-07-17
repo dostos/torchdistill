@@ -25,9 +25,10 @@ from torchdistill.models.registry import get_model
 logger = def_logger.getChild(__name__)
 
 def model_summary(model):
-    input = torch.randn(1, 3, 32, 32).cuda()
-    macs, params = profile(model, inputs=(input,))
-    logger.info('Model macs {} params {}'.format(macs, params))
+    if model is not None:
+        input = torch.randn(1, 3, 32, 32).cuda()
+        macs, params = profile(model, inputs=(input,))
+        logger.info('Model macs {} params {}'.format(macs, params))
 
 def get_argparser():
     parser = argparse.ArgumentParser(description='Knowledge distillation for image classification models')

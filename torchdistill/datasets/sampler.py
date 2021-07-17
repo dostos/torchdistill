@@ -1,5 +1,8 @@
 import bisect
 import copy
+import multiprocessing as mp
+import parmap
+
 from collections import defaultdict
 
 import numpy as np
@@ -213,30 +216,75 @@ def get_batch_sampler(dataset, class_name, *args, **kwargs):
     return batch_sampler_cls(*args, **kwargs)
 
 
+def count(indices, dataset):
+    global single 
+    worker_category_counts = dict()
+
+    for category in dataset.coco.cats.keys():
+        worker_category_counts[category] = 0
+
+    for i in indices:
+        [img, result] = dataset.get_raw(i)
+        for label in result['annotations']:
+            worker_category_counts[label['category_id']] = worker_category_counts[label['category_id']] + 1
+    
+    return worker_category_counts
+
 class TargetClassSampler(WeightedRandomSampler):
     def __init__(self, dataset, target_classes, target_weight = 0.5):
-        target_classes_set = set()
-        idx2class = {v: k for k, v in dataset.class_to_idx.items()}
+        if isinstance(dataset, torch.utils.data.Subset):
+            subset = dataset
+            dataset = dataset.dataset
 
-        for target_class in target_classes:
-            if isinstance(target_class, int) and target_class in idx2class:
-                target_classes_set.add(target_class)
-            elif isinstance(target_class, str) and target_class in dataset.class_to_idx:
-                target_classes_set.add(dataset.class_to_idx[target_class])
+            category_counts = dict()
+            category_weights = dict()
+            total_count = 0
+            for category in dataset.coco.cats.keys():
+                category_counts[category] = 0
 
-        target_classes = target_classes_set
-        num_target_classes = len(target_classes)
-        num_classes = len(dataset.classes)
+            num_cores = mp.cpu_count()
+            result = parmap.map(count, np.array_split(subset.indices, num_cores), dataset=dataset, pm_pbar=True, pm_processes=num_cores)
 
-        logger.info('Target classes {} weight {}'.format([idx2class[c] for c in target_classes], target_weight))
+            for category in dataset.coco.cats.keys():
+                for worker_category_counts in result: 
+                    category_counts[category] = category_counts[category] + worker_category_counts[category]
+                    total_count = total_count + worker_category_counts[category]
+            
+            num_target_classes = len(target_classes)
+            num_classes = len(dataset.coco.cats.keys())
 
-        sample_weights = [0] * len(dataset)
+            for category in dataset.coco.cats.keys():
+                if category in target_classes:
+                    category_weights[category] = target_weight
+                else:
+                        
 
-        for index, (input, label) in enumerate(dataset):
-            if label in target_classes:
-                sample_weights[index] = target_weight / num_target_classes
-            else:
-                sample_weights[index] = (1.0 - target_weight) / (num_classes - num_target_classes)
+
+
+            sample_weights = [1 / len(subset)] * len(subset)
+        else:
+            target_classes_set = set()
+            idx2class = {v: k for k, v in dataset.class_to_idx.items()}
+
+            for target_class in target_classes:
+                if isinstance(target_class, int) and target_class in idx2class:
+                    target_classes_set.add(target_class)
+                elif isinstance(target_class, str) and target_class in dataset.class_to_idx:
+                    target_classes_set.add(dataset.class_to_idx[target_class])
+
+            target_classes = target_classes_set
+            num_target_classes = len(target_classes)
+            num_classes = len(dataset.classes)
+
+            logger.info('Target classes {} weight {}'.format([idx2class[c] for c in target_classes], target_weight))
+
+            sample_weights = [0] * len(dataset)
+
+            for index, (input, label) in enumerate(dataset):
+                if label in target_classes:
+                    sample_weights[index] = target_weight / num_target_classes
+                else:
+                    sample_weights[index] = (1.0 - target_weight) / (num_classes - num_target_classes)
 
         super().__init__(weights=sample_weights, num_samples=len(sample_weights))
 
