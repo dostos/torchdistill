@@ -82,7 +82,6 @@ class OrgDictLoss(nn.Module):
             loss += factor * self.single_loss(input_batch, targets, *args, **kwargs)
         return loss
 
-
 @register_org_loss
 class KDLoss(nn.KLDivLoss):
     """
@@ -105,6 +104,42 @@ class KDLoss(nn.KLDivLoss):
         hard_loss = self.cross_entropy_loss(student_output, targets)
         return self.alpha * hard_loss + self.beta * (self.temperature ** 2) * soft_loss
 
+@register_org_loss
+class PLLoss(nn.Module):
+    """
+    "Distilling the Knowledge in a Neural Network"
+    """
+    def __init__(self, reduction='batchmean', **kwargs):
+        super().__init__()
+        cel_reduction = 'mean' if reduction == 'batchmean' else reduction
+        self.cross_entropy_loss = nn.CrossEntropyLoss(reduction=cel_reduction, **kwargs)
+
+    def forward(self, student_output, teacher_output, targets=None, *args, **kwargs):
+        _, teacher_preds = teacher_output.topk(1)
+        return self.cross_entropy_loss(student_output, teacher_preds.flatten())
+
+@register_org_loss
+class KDPseudoLabeledLoss(nn.KLDivLoss):
+    """
+    "Distilling the Knowledge in a Neural Network"
+    """
+    def __init__(self, temperature, alpha=None, beta=None, reduction='batchmean', **kwargs):
+        super().__init__(reduction=reduction)
+        self.temperature = temperature
+        self.alpha = alpha
+        self.beta = 1 - alpha if beta is None else beta
+        cel_reduction = 'mean' if reduction == 'batchmean' else reduction
+        self.cross_entropy_loss = nn.CrossEntropyLoss(reduction=cel_reduction, **kwargs)
+
+    def forward(self, student_output, teacher_output, targets=None, *args, **kwargs):
+        soft_loss = super().forward(torch.log_softmax(student_output / self.temperature, dim=1),
+                                    torch.softmax(teacher_output / self.temperature, dim=1))
+        if self.alpha is None or self.alpha == 0 or targets is None:
+            return soft_loss
+
+        _, teacher_preds = teacher_output.topk(1)
+        hard_loss = self.cross_entropy_loss(student_output, teacher_preds.flatten())
+        return self.alpha * hard_loss + self.beta * (self.temperature ** 2) * soft_loss
 
 @register_single_loss
 class FSPLoss(nn.Module):
