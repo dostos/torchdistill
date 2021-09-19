@@ -1,4 +1,5 @@
 import math
+import random
 
 import torch
 from torch import nn
@@ -82,6 +83,22 @@ class OrgDictLoss(nn.Module):
             loss += factor * self.single_loss(input_batch, targets, *args, **kwargs)
         return loss
 
+@register_single_loss
+class NoisedCrossEntropyLoss(nn.Module):
+    def __init__(self, reduction, noise_rate, num_classes, **kwargs):
+        super().__init__()
+        assert noise_rate >= 0 and noise_rate <= 1.0, "Noise rate should (0, 1)"
+        self.noise_rate = noise_rate
+        self.num_classes = num_classes
+        self.cross_entropy_loss = nn.CrossEntropyLoss(reduction=reduction, **kwargs)
+
+    def forward(self, student_output, targets, *args, **kwargs):
+        for i in range(len(targets)):
+            if random.random() < self.noise_rate: 
+                targets[i] = random.randint(0, self.num_classes - 1)
+                
+        return self.cross_entropy_loss(student_output, targets)
+
 @register_org_loss
 class KDLoss(nn.KLDivLoss):
     """
@@ -107,7 +124,7 @@ class KDLoss(nn.KLDivLoss):
 @register_org_loss
 class PLLoss(nn.Module):
     """
-    "Distilling the Knowledge in a Neural Network"
+    Pseudo-labeling loss
     """
     def __init__(self, reduction='batchmean', **kwargs):
         super().__init__()
