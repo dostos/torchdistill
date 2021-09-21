@@ -3,7 +3,7 @@ import random
 
 import torch
 from torch import nn
-from torch.nn.functional import adaptive_avg_pool2d, adaptive_max_pool2d, normalize, cosine_similarity
+from torch.nn.functional import adaptive_avg_pool2d, adaptive_max_pool2d, normalize, cosine_similarity, log_softmax, softmax
 
 from torchdistill.common.constant import def_logger
 from torchdistill.losses.registry import get_loss
@@ -126,14 +126,47 @@ class PLLoss(nn.Module):
     """
     Pseudo-labeling loss
     """
-    def __init__(self, reduction='batchmean', **kwargs):
+    def __init__(self, reduction='batchmean', confidence_threshold=0.0, **kwargs):
         super().__init__()
-        cel_reduction = 'mean' if reduction == 'batchmean' else reduction
-        self.cross_entropy_loss = nn.CrossEntropyLoss(reduction=cel_reduction, **kwargs)
+        ce_reduction = 'mean' if reduction == 'batchmean' else reduction
+        self.confidence_threshold = confidence_threshold
+        if confidence_threshold > 0.0:
+            ce_reduction = 'none'
+
+        self.cross_entropy_loss = nn.CrossEntropyLoss(reduction=ce_reduction, **kwargs)
+
+        self.total = 0
+        self.masked = 0
+        self.top1, self.top5 = 0, 0
+        self.tp, self.fp, self.fn, self.tn = 0, 0, 0, 0
+
+    def __str__(self):
+        return f'PLLoss - total : {self.total} masked : {self.masked} tp : {self.tp} fp : {self.fp} fn : {self.fn} tn : {self.tn} top1 : {self.top1} top5 : {self.top5}'
 
     def forward(self, student_output, teacher_output, targets=None, *args, **kwargs):
         _, teacher_preds = teacher_output.topk(1)
-        return self.cross_entropy_loss(student_output, teacher_preds.flatten())
+        
+        if self.confidence_threshold > 0.0:
+            loss = self.cross_entropy_loss(student_output, teacher_preds.flatten())
+            probabilities, _ = softmax(teacher_output, -1).topk(1)
+            _, top5_preds = teacher_output.topk(5)
+
+            mask = probabilities.flatten() >= self.confidence_threshold
+            true_pseudo_label = teacher_preds.flatten() == targets.flatten()
+
+            self.total = self.total + len(targets)
+            self.masked = self.masked + (len(targets) - mask.sum())
+            self.top1 = self.top1 + true_pseudo_label.sum()
+            self.top5 = self.top5 + (top5_preds.eq(targets.view(-1, 1)).sum())
+
+            self.tp = self.tp + mask.logical_and(true_pseudo_label).sum()
+            self.fp = self.fp + mask.logical_and(~true_pseudo_label).sum()
+            self.fn = self.fn + mask.logical_not().logical_and(true_pseudo_label).sum()
+            self.tn = self.tn + mask.logical_not().logical_and(~true_pseudo_label).sum()
+
+            return (loss * mask).sum() / mask.sum()
+        else:
+            return self.cross_entropy_loss(student_output, teacher_preds.flatten())
 
 @register_org_loss
 class KDPseudoLabeledLoss(nn.KLDivLoss):
