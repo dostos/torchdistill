@@ -98,7 +98,7 @@ def load_ckpt(ckpt_file_path, model=None, optimizer=None, lr_scheduler=None, str
     ckpt = torch.load(ckpt_file_path, map_location='cpu')
     if model is not None:
         if 'model' in ckpt:
-            logger.info('Loading model parameters')
+            logger.info(f'Loading model parameters from {ckpt_file_path}')
             if strict is None:
                 model.load_state_dict(ckpt['model'])
             else:
