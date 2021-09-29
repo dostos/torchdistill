@@ -85,16 +85,16 @@ class OrgDictLoss(nn.Module):
 
 @register_single_loss
 class NoisedCrossEntropyLoss(nn.Module):
-    def __init__(self, reduction, noise_rate, num_classes, **kwargs):
+    def __init__(self, reduction, alpha, num_classes, **kwargs):
         super().__init__()
-        assert noise_rate >= 0 and noise_rate <= 1.0, "Noise rate should (0, 1)"
-        self.noise_rate = noise_rate
+        assert alpha >= 0 and alpha <= 1.0, "Noise rate should (0, 1)"
+        self.alpha = alpha
         self.num_classes = num_classes
         self.cross_entropy_loss = nn.CrossEntropyLoss(reduction=reduction, **kwargs)
 
     def forward(self, student_output, targets, *args, **kwargs):
         for i in range(len(targets)):
-            if random.random() < self.noise_rate: 
+            if random.random() < self.alpha: 
                 targets[i] = random.randint(0, self.num_classes - 1)
                 
         return self.cross_entropy_loss(student_output, targets)
