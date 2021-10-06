@@ -18,10 +18,10 @@ def extract_simple_org_loss(org_criterion, student_outputs, teacher_outputs, tar
                     org_loss_dict[i] = org_criterion(sub_student_outputs, sub_teacher_outputs, targets, loss_dict=loss_dict)
             else:
                 for i, sub_outputs in enumerate(student_outputs):
-                    org_loss_dict[i] = org_criterion(sub_outputs, targets, loss_dict=loss_dict)
+                    org_loss_dict[i] = org_criterion(sub_outputs, targets)
         else:
             org_loss = org_criterion(student_outputs, teacher_outputs, targets, loss_dict=loss_dict) if uses_teacher_output \
-                else org_criterion(student_outputs, targets, loss_dict=loss_dict)
+                else org_criterion(student_outputs, targets)
             org_loss_dict = {0: org_loss}
     return org_loss_dict
 

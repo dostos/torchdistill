@@ -8,6 +8,7 @@ from torchvision.datasets import PhotoTour, Kinetics400, HMDB51, UCF101, Citysca
     SBDataset, VOCSegmentation, VOCDetection
 
 from torchdistill.common.constant import def_logger
+from torchdistill.datasets.caltech import CustomCaltech256
 from torchdistill.datasets.coco import ImageToTensor, Compose, CocoRandomHorizontalFlip, get_coco
 from torchdistill.datasets.collator import get_collate_func
 from torchdistill.datasets.registry import DATASET_DICT
@@ -123,7 +124,6 @@ def get_dataset_dict(dataset_config):
     dataset_type = dataset_config['type']
     dataset_dict = dict()
     dataset_dict['num_classes'] = dataset_config['num_classes']
-    
     dataset_dict['num_target_classes'] = dataset_config['num_target_classes'] if 'num_target_classes' in dataset_config else None
     if dataset_type == 'cocodetect':
         dataset_splits_config = dataset_config['splits']
@@ -146,6 +146,13 @@ def get_dataset_dict(dataset_config):
             split_config = dataset_splits_config[split_name]
             org_dataset = get_torchvision_dataset(dataset_cls_or_func, split_config['params']) if is_torchvision \
                 else dataset_cls_or_func(**split_config['params'])
+            
+            # Update class-related attributes for sync with ilsvrc, cifar10 / 100
+            if not hasattr(org_dataset, 'classes'):
+                org_dataset.classes = org_dataset.categories
+            if not hasattr(org_dataset, 'class_to_idx'):
+                org_dataset.class_to_idx = {k: v for v, k in enumerate(org_dataset.classes)}
+                                
             dataset_id = split_config['dataset_id']
             random_split_config = split_config.get('random_split', None)
             if random_split_config is None:
