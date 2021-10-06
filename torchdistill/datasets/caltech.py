@@ -58,7 +58,6 @@ class CustomCaltech256(VisionDataset):
             n = len(fnmatch.filter(os.listdir(os.path.join(self.root, "256_ObjectCategories", c)), "*.jpg"))
             self.index.extend(range(0, n))
             self.y.extend(n * [i])
-            print(i)
             
     def __getitem__(self, index: int) -> Tuple[Any, Any]:
         """
