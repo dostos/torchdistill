@@ -141,7 +141,7 @@ class PLLoss(nn.Module):
         self.tp, self.fp, self.fn, self.tn = 0, 0, 0, 0
 
     def __str__(self):
-        return f'PLLoss - total : {self.total} masked : {self.masked} tp : {self.tp} fp : {self.fp} fn : {self.fn} tn : {self.tn} top1 : {self.top1} top5 : {self.top5}'
+        return f'{type(self).__name__} - total : {self.total} masked : {self.masked} tp : {self.tp} fp : {self.fp} fn : {self.fn} tn : {self.tn} top1 : {self.top1} top5 : {self.top5}'
 
     def forward(self, student_output, teacher_output, targets=None, *args, **kwargs):
         _, teacher_preds = teacher_output.topk(1)
@@ -168,6 +168,18 @@ class PLLoss(nn.Module):
         else:
             return self.cross_entropy_loss(student_output, teacher_preds.flatten())
 
+@register_org_loss
+class ClassSimilarityPLLoss(PLLoss):
+    """
+    Pseudo-labeling with class similarity based adjustment.
+    """
+    def forward(self, student_output, teacher_output, loss_dict, targets=None, *args, **kwargs):
+        print(loss_dict)
+        class_similarity = loss_dict['class_similarity']
+        class_mask = loss_dict['class_mask']
+        teacher_output = class_similarity.adjust_predict(teacher_output, class_mask)
+        super().forward(student_output, teacher_output, targets, args)
+        
 @register_org_loss
 class KDPseudoLabeledLoss(nn.KLDivLoss):
     """

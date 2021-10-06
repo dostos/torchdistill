@@ -298,7 +298,7 @@ class DistillationBox(nn.Module):
                 torch.save(cache_dict, cache_file_path)
         return teacher_outputs, extracted_teacher_io_dict
 
-    def forward(self, sample_batch, targets, supp_dict):
+    def forward(self, sample_batch, targets, supp_dict, loss_dict=None):
         teacher_outputs, extracted_teacher_io_dict =\
             self.get_teacher_output(sample_batch, targets, supp_dict=supp_dict)
         student_outputs = self.student_forward_proc(self.student_model, sample_batch, targets, supp_dict)
@@ -307,11 +307,11 @@ class DistillationBox(nn.Module):
             self.student_model.post_forward(extracted_student_io_dict)
 
         org_loss_dict = self.extract_org_loss(self.org_criterion, student_outputs, teacher_outputs, targets,
-                                              uses_teacher_output=self.uses_teacher_output, supp_dict=supp_dict)
+                                              uses_teacher_output=self.uses_teacher_output, supp_dict=supp_dict, loss_dict=loss_dict)
         update_io_dict(extracted_student_io_dict, extract_io_dict(self.student_io_dict, self.device))
         output_dict = {'teacher': extracted_teacher_io_dict,
                        'student': extracted_student_io_dict}
-        total_loss = self.criterion(output_dict, org_loss_dict, targets)
+        total_loss = self.criterion(output_dict, org_loss_dict, targets, loss_dict=loss_dict)
         return total_loss
 
     def update_params(self, loss, **kwargs):

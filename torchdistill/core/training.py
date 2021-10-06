@@ -184,7 +184,7 @@ class TrainingBox(nn.Module):
         if self.distributed:
             self.train_data_loader.batch_sampler.sampler.set_epoch(epoch)
 
-    def forward(self, sample_batch, targets, supp_dict):
+    def forward(self, sample_batch, targets, supp_dict, loss_dict=None):
         model_outputs = self.model_forward_proc(self.model, sample_batch, targets, supp_dict)
         extracted_model_io_dict = extract_io_dict(self.model_io_dict, self.device)
         if isinstance(self.model, SpecialModule):
@@ -192,10 +192,10 @@ class TrainingBox(nn.Module):
 
         teacher_outputs = None
         org_loss_dict = self.extract_org_loss(self.org_criterion, model_outputs, teacher_outputs, targets,
-                                              uses_teacher_output=False, supp_dict=supp_dict)
+                                              uses_teacher_output=False, supp_dict=supp_dict, loss_dict=loss_dict)
         update_io_dict(extracted_model_io_dict, extract_io_dict(self.model_io_dict, self.device))
         output_dict = {'student': extracted_model_io_dict, 'teacher': dict()}
-        total_loss = self.criterion(output_dict, org_loss_dict, targets)
+        total_loss = self.criterion(output_dict, org_loss_dict, targets, loss_dict=loss_dict)
         return total_loss
 
     def update_params(self, loss, **kwargs):

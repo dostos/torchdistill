@@ -8,19 +8,20 @@ def register_func2extract_org_output(func):
 
 @register_func2extract_org_output
 def extract_simple_org_loss(org_criterion, student_outputs, teacher_outputs, targets, uses_teacher_output, **kwargs):
+    print(kwargs)
     org_loss_dict = dict()
     if org_criterion is not None:
         # Models with auxiliary classifier returns multiple outputs
         if isinstance(student_outputs, (list, tuple)):
             if uses_teacher_output:
                 for i, sub_student_outputs, sub_teacher_outputs in enumerate(zip(student_outputs, teacher_outputs)):
-                    org_loss_dict[i] = org_criterion(sub_student_outputs, sub_teacher_outputs, targets)
+                    org_loss_dict[i] = org_criterion(sub_student_outputs, sub_teacher_outputs, targets, loss_dict=kwargs['loss_dict'])
             else:
                 for i, sub_outputs in enumerate(student_outputs):
-                    org_loss_dict[i] = org_criterion(sub_outputs, targets)
+                    org_loss_dict[i] = org_criterion(sub_outputs, targets, loss_dict=kwargs['loss_dict'])
         else:
-            org_loss = org_criterion(student_outputs, teacher_outputs, targets) if uses_teacher_output \
-                else org_criterion(student_outputs, targets)
+            org_loss = org_criterion(student_outputs, teacher_outputs, targets, loss_dict=kwargs['loss_dict']) if uses_teacher_output \
+                else org_criterion(student_outputs, targets, loss_dict=kwargs['loss_dict'])
             org_loss_dict = {0: org_loss}
     return org_loss_dict
 
@@ -31,7 +32,7 @@ def extract_simple_org_loss_dict(org_criterion, student_outputs, teacher_outputs
     if isinstance(student_outputs, dict):
         org_loss_dict = dict()
         for key, outputs in student_outputs.items():
-            org_loss_dict[key] = org_criterion(outputs, targets)
+            org_loss_dict[key] = org_criterion(outputs, targets, loss_dict=kwargs['loss_dict'])
     return org_loss_dict
 
 
