@@ -122,6 +122,9 @@ def split_dataset(org_dataset, random_split_config, dataset_id, dataset_dict):
 def get_dataset_dict(dataset_config):
     dataset_type = dataset_config['type']
     dataset_dict = dict()
+    dataset_dict['num_classes'] = dataset_config['num_classes']
+    
+    dataset_dict['num_target_classes'] = dataset_config['num_target_classes'] if 'num_target_classes' in dataset_config else None
     if dataset_type == 'cocodetect':
         dataset_splits_config = dataset_config['splits']
         for split_name in dataset_splits_config.keys():
