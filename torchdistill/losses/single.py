@@ -173,12 +173,12 @@ class ClassSimilarityPLLoss(PLLoss):
     """
     Pseudo-labeling with class similarity based adjustment.
     """
-    def forward(self, student_output, teacher_output, loss_dict, targets=None, *args, **kwargs):
-        print(loss_dict)
+    def forward(self, student_output, teacher_output, targets=None, *args, **kwargs):
+        loss_dict = kwargs.get('loss_dict', dict())
         class_similarity = loss_dict['class_similarity']
         class_mask = loss_dict['class_mask']
         teacher_output = class_similarity.adjust_predict(teacher_output, class_mask)
-        super().forward(student_output, teacher_output, targets, args)
+        return super().forward(student_output, teacher_output, targets, args)
         
 @register_org_loss
 class KDPseudoLabeledLoss(nn.KLDivLoss):

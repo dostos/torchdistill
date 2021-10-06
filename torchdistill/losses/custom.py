@@ -40,7 +40,7 @@ class GeneralizedCustomLoss(CustomLoss):
         super().__init__(criterion_config)
         self.org_loss_factor = criterion_config['org_term'].get('factor', None)
 
-    def forward(self, output_dict, org_loss_dict, targets):
+    def forward(self, output_dict, org_loss_dict, targets, **kwargs):
         loss_dict = dict()
         student_output_dict = output_dict['student']
         teacher_output_dict = output_dict['teacher']
