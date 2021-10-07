@@ -166,6 +166,13 @@ class PLLoss(nn.Module):
 
             return (loss * mask).sum() / mask.sum()
         else:
+            true_pseudo_label = teacher_preds.flatten() == targets.flatten()
+            _, top5_preds = teacher_output.topk(5)
+
+            self.total = self.total + len(targets)
+            self.top1 = self.top1 + true_pseudo_label.sum()
+            self.top5 = self.top5 + (top5_preds.eq(targets.view(-1, 1)).sum())
+
             return self.cross_entropy_loss(student_output, teacher_preds.flatten())
 
 @register_org_loss
