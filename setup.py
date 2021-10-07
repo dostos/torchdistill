@@ -23,6 +23,8 @@ setup(
         'pyyaml>=5.4.1',
         'scipy',
         'cython',
+        'imageio',
+        'barbar',
         'pycocotools>=2.0.1'
     ],
     extras_require={
