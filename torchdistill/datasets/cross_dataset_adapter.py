@@ -4,6 +4,13 @@ from typing import TypeVar, Dict
 
 T = TypeVar('T')
 
+def constant(f):
+    def fset(self, value):
+        raise TypeError
+    def fget(self):
+        return f()
+    return property(fget, fset)
+
 # TODO: May need better super class that returns sample, target from __getitem__ by default
 class CrossDatasetAdapter(VisionDataset):
     r"""
@@ -32,10 +39,14 @@ class CrossDatasetAdapter(VisionDataset):
             if self.class_to_idx[class_name] not in self.sources:
                 self.dummy = self.class_to_idx[class_name]
                 break
+    
+    @constant
+    def OutOfSourceLabel():
+        return -1
 
     def __getitem__(self, idx):
         sample, target = self.dataset[idx]
-        return sample, self.target_to_source[target] if target in self.target_to_source else -1
+        return sample, self.target_to_source[target] if target in self.target_to_source else self.OutOfSourceLabel
 
     def __len__(self):
         return len(self.dataset)
