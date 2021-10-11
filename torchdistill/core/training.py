@@ -10,6 +10,7 @@ from torchdistill.common.module_util import check_if_wrapped, freeze_module_para
     get_updatable_param_names
 from torchdistill.core.forward_proc import get_forward_proc_func
 from torchdistill.core.util import set_hooks, wrap_model, clear_io_dict, extract_io_dict, update_io_dict
+from torchdistill.eval.classification import compute_accuracy
 from torchdistill.datasets.util import build_data_loaders
 from torchdistill.losses.custom import get_custom_loss
 from torchdistill.losses.single import get_single_loss
@@ -196,7 +197,8 @@ class TrainingBox(nn.Module):
         update_io_dict(extracted_model_io_dict, extract_io_dict(self.model_io_dict, self.device))
         output_dict = {'student': extracted_model_io_dict, 'teacher': dict()}
         total_loss = self.criterion(output_dict, org_loss_dict, targets, loss_dict=loss_dict)
-        return total_loss
+        acc1, acc5 = compute_accuracy(model_outputs, targets, topk=(1, 5))
+        return total_loss, acc1, acc5
 
     def update_params(self, loss, **kwargs):
         self.stage_grad_count += 1
