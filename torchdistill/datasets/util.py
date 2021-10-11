@@ -1,4 +1,5 @@
 import time
+import json
 
 import torch
 import torchvision
@@ -8,7 +9,7 @@ from torchvision.datasets import PhotoTour, Kinetics400, HMDB51, UCF101, Citysca
     SBDataset, VOCSegmentation, VOCDetection
 
 from torchdistill.common.constant import def_logger
-from torchdistill.datasets.caltech import CustomCaltech256
+from torchdistill.datasets.cross_dataset_adapter import CrossDatasetAdapter
 from torchdistill.datasets.coco import ImageToTensor, Compose, CocoRandomHorizontalFlip, get_coco
 from torchdistill.datasets.collator import get_collate_func
 from torchdistill.datasets.registry import DATASET_DICT
@@ -78,14 +79,24 @@ def get_torchvision_dataset(dataset_cls, dataset_params_config):
             else get_sample_loader(loader_type, **loader_params_config)
         params_config['loader'] = loader
 
+    cross_label = params_config.pop('cross_label', None)
+
     # For datasets without target_transform
     if dataset_cls in (PhotoTour, Kinetics400, HMDB51, UCF101):
-        return dataset_cls(transform=transform, **params_config)
+        dataset = dataset_cls(transform=transform, **params_config)
     # For datasets with transforms
     if dataset_cls in (Cityscapes, CocoCaptions, CocoDetection, SBDataset, VOCSegmentation, VOCDetection):
-        return dataset_cls(transform=transform, target_transform=target_transform,
+        dataset = dataset_cls(transform=transform, target_transform=target_transform,
                            transforms=transforms, **params_config)
-    return dataset_cls(transform=transform, target_transform=target_transform, **params_config)
+    dataset = dataset_cls(transform=transform, target_transform=target_transform, **params_config)
+    
+    if cross_label is not None:
+        with open(cross_label) as json_file:
+            target_to_source = json.load(json_file)
+        
+        return CrossDatasetAdapter(dataset,target_to_source)
+    else:
+        return dataset
 
 
 def split_dataset(org_dataset, random_split_config, dataset_id, dataset_dict):
@@ -123,6 +134,7 @@ def split_dataset(org_dataset, random_split_config, dataset_id, dataset_dict):
 def get_dataset_dict(dataset_config):
     dataset_type = dataset_config['type']
     dataset_dict = dict()
+    dataset_dict['cross_label'] = dataset_config['cross_label']  if 'cross_label' in dataset_config else None
     dataset_dict['num_classes'] = dataset_config['num_classes']
     dataset_dict['num_target_classes'] = dataset_config['num_target_classes'] if 'num_target_classes' in dataset_config else None
     if dataset_type == 'cocodetect':
@@ -146,12 +158,6 @@ def get_dataset_dict(dataset_config):
             split_config = dataset_splits_config[split_name]
             org_dataset = get_torchvision_dataset(dataset_cls_or_func, split_config['params']) if is_torchvision \
                 else dataset_cls_or_func(**split_config['params'])
-            
-            # Update class-related attributes for sync with ilsvrc, cifar10 / 100
-            if not hasattr(org_dataset, 'classes'):
-                org_dataset.classes = org_dataset.categories
-            if not hasattr(org_dataset, 'class_to_idx'):
-                org_dataset.class_to_idx = {k: v for v, k in enumerate(org_dataset.classes)}
                                 
             dataset_id = split_config['dataset_id']
             random_split_config = split_config.get('random_split', None)
