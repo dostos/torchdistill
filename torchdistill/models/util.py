@@ -7,9 +7,11 @@ from torch.nn.parallel import DistributedDataParallel
 
 from torchdistill.common.constant import def_logger
 from torchdistill.common.file_util import make_parent_dirs
-from torchdistill.common.main_util import is_main_process, save_on_master
+from torchdistill.common.main_util import is_main_process, load_ckpt, save_on_master
 from torchdistill.common.module_util import check_if_wrapped, get_module, get_frozen_param_names, freeze_module_params
 from torchdistill.models.adaptation import get_adaptation_module
+from torchdistill.models.official import get_image_classification_model
+from torchdistill.models.registry import get_model
 
 logger = def_logger.getChild(__name__)
 
@@ -104,3 +106,22 @@ def redesign_model(org_model, model_config, model_label, model_type='original'):
             freeze_module_params(module)
         add_submodule(module, module_path, module_dict)
     return build_sequential_container(module_dict)
+
+
+def load_model(model_config, device, distributed, sync_bn, use_ckpt=False):
+    model = get_image_classification_model(model_config, distributed, sync_bn)
+    if model is None:
+        repo_or_dir = model_config.get('repo_or_dir', None)
+        model = get_model(model_config['name'],
+                          repo_or_dir, **model_config['params'])
+    if use_ckpt:
+        ckpt_file_path = model_config['ckpt']
+    else:
+        ckpt_file_path = model_config['weight']
+
+    if not model_config['params']['pretrained']:
+        load_ckpt(ckpt_file_path, model=model, strict=True)
+    else:
+        logger.info('Using pretrained weights')
+
+    return model.to(device)
