@@ -3,8 +3,9 @@ from typing import Type, Any, Callable, Union, List, Optional
 import torch
 import torch.nn as nn
 from torch import Tensor
-from torchvision.models.resnet import ResNet
+from torchvision.models.resnet import ResNet, model_urls
 from torchdistill.models.registry import register_model_class, register_model_func
+from torchvision.models.resnet import BasicBlock, Bottleneck
 
 def _headless_resnet(
     arch: str,
@@ -16,18 +17,18 @@ def _headless_resnet(
 ) -> ResNet:
     model = ResNet(block, layers, **kwargs)
     if pretrained:
-        state_dict = load_state_dict_from_url(model_urls[arch],
+        state_dict = torch.hub.load_state_dict_from_url(model_urls[arch],
                                               progress=progress)
         
-        if kwargs[num_classes] != 1000:
-          del state_dict['fc.weight']
-          del state_dict['fc.bias']
+        if kwargs['num_classes'] != 1000:
+            del state_dict['fc.weight']
+            del state_dict['fc.bias']
          
-        model.load_state_dict(state_dict)
+        model.load_state_dict(state_dict, strict=False)
     return model
 
 @register_model_func
-def headless_resnet18(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> ResNet:
+def resnet18(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> ResNet:
     r"""ResNet-18 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_.
 
@@ -39,7 +40,7 @@ def headless_resnet18(pretrained: bool = False, progress: bool = True, **kwargs:
                    **kwargs)
 
 @register_model_func
-def headless_resnet34(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> ResNet:
+def resnet34(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> ResNet:
     r"""ResNet-34 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_.
 
@@ -51,7 +52,7 @@ def headless_resnet34(pretrained: bool = False, progress: bool = True, **kwargs:
                    **kwargs)
 
 @register_model_func
-def headless_resnet50(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> ResNet:
+def resnet50(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> ResNet:
     r"""ResNet-50 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_.
 
@@ -64,7 +65,7 @@ def headless_resnet50(pretrained: bool = False, progress: bool = True, **kwargs:
 
 
 @register_model_func
-def headless_resnet101(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> ResNet:
+def resnet101(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> ResNet:
     r"""ResNet-101 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_.
 
@@ -77,7 +78,7 @@ def headless_resnet101(pretrained: bool = False, progress: bool = True, **kwargs
 
 
 @register_model_func
-def headless_resnet152(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> ResNet:
+def resnet152(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> ResNet:
     r"""ResNet-152 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_.
 

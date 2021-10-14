@@ -110,11 +110,16 @@ def redesign_model(org_model, model_config, model_label, model_type='original'):
 
 
 def load_model(model_config, device, distributed, sync_bn, use_ckpt=False):
-    model = get_image_classification_model(model_config, distributed, sync_bn)
+    repo_or_dir = model_config.get('repo_or_dir', None)
+    model = get_model(model_config['name'],
+                        repo_or_dir, **model_config['params'])
+
     if model is None:
-        repo_or_dir = model_config.get('repo_or_dir', None)
-        model = get_model(model_config['name'],
-                          repo_or_dir, **model_config['params'])
+        model = get_image_classification_model(model_config, distributed, sync_bn)
+    
+    if model is None:
+        raise ValueError('model_name `{}` is not expected'.format(model_config['name']))
+    
     if use_ckpt:
         ckpt_file_path = model_config['ckpt']
     else:

@@ -22,4 +22,4 @@ def get_model(model_name, repo_or_dir=None, **kwargs):
         return MODEL_FUNC_DICT[model_name](**kwargs)
     elif repo_or_dir is not None:
         return torch.hub.load(repo_or_dir, model_name, **kwargs)
-    raise ValueError('model_name `{}` is not expected'.format(model_name))
+    return None
