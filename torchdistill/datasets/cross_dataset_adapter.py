@@ -22,6 +22,8 @@ class CrossDatasetAdapter(VisionDataset):
     """
     dataset: VisionDataset
     target_to_source: Dict[str, str]
+    
+    OutOfSourceLabel=-1
 
     def __init__(self, dataset: VisionDataset, target_to_source: Dict[str, str]) -> None:
         self.dataset = dataset
@@ -39,10 +41,6 @@ class CrossDatasetAdapter(VisionDataset):
             if self.class_to_idx[class_name] not in self.sources:
                 self.dummy = self.class_to_idx[class_name]
                 break
-    
-    @constant
-    def OutOfSourceLabel():
-        return -1
 
     def __getitem__(self, idx):
         sample, target = self.dataset[idx]
