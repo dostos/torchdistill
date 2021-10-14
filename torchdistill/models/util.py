@@ -10,6 +10,7 @@ from torchdistill.common.file_util import make_parent_dirs
 from torchdistill.common.main_util import is_main_process, load_ckpt, save_on_master
 from torchdistill.common.module_util import check_if_wrapped, get_module, get_frozen_param_names, freeze_module_params
 from torchdistill.models.adaptation import get_adaptation_module
+from torchdistill.models.custom.headless_resnet import *
 from torchdistill.models.official import get_image_classification_model
 from torchdistill.models.registry import get_model
 
