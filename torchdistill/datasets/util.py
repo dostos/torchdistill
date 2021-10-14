@@ -12,6 +12,7 @@ from torchdistill.common.constant import def_logger
 from torchdistill.datasets.cross_dataset_adapter import CrossDatasetAdapter
 from torchdistill.datasets.coco import ImageToTensor, Compose, CocoRandomHorizontalFlip, get_coco
 from torchdistill.datasets.collator import get_collate_func
+from torchdistill.datasets.custom.headless_resnet import *
 from torchdistill.datasets.registry import DATASET_DICT
 from torchdistill.datasets.sample_loader import get_sample_loader
 from torchdistill.datasets.sampler import get_batch_sampler
