@@ -1,5 +1,7 @@
 from collections import OrderedDict
 
+import os
+
 import torch
 from torch import nn
 from torch.nn import Module, Sequential
@@ -125,8 +127,9 @@ def load_model(model_config, device, distributed, sync_bn, use_ckpt=False):
     else:
         ckpt_file_path = model_config['weight']
 
-    if not model_config['params']['pretrained']:
+    if os.path.exists(ckpt_file_path) or not model_config['params']['pretrained']:
         load_ckpt(ckpt_file_path, model=model, strict=True)
+        logger.info(f'Using ckpt from {ckpt_file_path}')
     else:
         logger.info('Using pretrained weights')
 
